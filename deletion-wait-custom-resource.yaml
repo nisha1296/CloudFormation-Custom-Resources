@@ -1,0 +1,76 @@
+Description: Custom resource to add a time delay between deletion of certain resources. In this case, the function would wait for a specified delay period before deleting security group
+Parameters:
+  DelayInSeconds:
+    Type: Number
+    Description: Time delay in seconds(max 290 seconds, keeping 10 seconds for Lambda to complete as maximum timeout for Lambda= 300seconds)
+    Default: '100'
+    MaxValue: '290'
+Resources:
+  testsecgroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: test 123
+  TimeDelayResource:
+    Type: 'Custom::TimeDelayFunction'
+    Properties:
+      ServiceToken: !GetAtt
+        - TimeDelayFunction
+        - Arn
+      DelayInput: !Ref DelayInSeconds
+  TimeDelayFunction:
+    DependsOn: testsecgroup
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt
+        - LambdaExecutionRole
+        - Arn
+      Code:
+        ZipFile: !Sub
+          - |
+            import time
+            import traceback
+            import cfnresponse
+            import boto3
+            def handler(event, context):
+              try:
+                if event['RequestType'] == "Create":
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData={})
+                elif event['RequestType'] == "Update":
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData={})
+                else:
+                  DelayInSeconds = event['ResourceProperties']['DelayInput']
+                  time.sleep(int(DelayInSeconds))
+                  print ("I timed out")
+                  responseValue = DelayInSeconds
+                  responseData = {}
+                  responseData['TimeDelaySeconds'] = responseValue
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "DelayFunctionwith"+str(DelayInSeconds)+"SecondsDelay")
+              except Exception as e:
+                print('Function failed due to exception.')
+                print(e)
+                traceback.print_exc()
+                DelayInSeconds = event['ResourceProperties']['DelayInput']
+                responseValue = DelayInSeconds
+                responseData = {}
+                responseData['TimeDelaySeconds'] = responseValue
+                cfnresponse.send(event, context, cfnresponse.FAILED, responseData, "DelayFunctionwith"+str(DelayInSeconds)+"SecondsDelay")
+          - delay: !Ref DelayInSeconds
+      Runtime: python3.6
+      Timeout: '300'
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: AWSCloudFormationStackSetExecutionRoleTimeDelayFunctions22hvj
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
